@@ -3,7 +3,7 @@ function aseta_asemat(kara_asema::Float64)
 end
 
 const maksimi_kierrosnopeus=502 #[rad/s]4793rpm
-const kierteen_nousu=0.01 #mm
+const kierteen_nousu=10 #mm
 const maksimi_kiihtys=(2/kierteen_nousu)*2*pi #rad/s^2
 const asetettu_nopeus=314 #[rad/s] 3000rpm
 const kiihdytys_aika=asetettu_nopeus/maksimi_kiihtys
@@ -27,10 +27,10 @@ function fun_moottorin_ajo(haluttu_asema::Float64,uusi_asema::Float64,uusi_aika:
     if((uusi_aika-alku_aika)<kiihdytys_aika && asetettu_nopeus>maksimi_kiihtys*(uusi_aika-alku_aika))
       kierrosnopeus=suunta*maksimi_kiihtys*(uusi_aika-alku_aika)
       global kiihdytys_matka=kulunut_matka                            #Asettaa tällä kappaleelle kiihdytys matkan, jota käytetään jarrutuksessa
-  elseif(asetettu_nopeus <= maksimi_kiihtys*(uusi_aika-alku_aika) && kulunut_matka < (koko_matka-kiihdytys_matka))
+    elseif(asetettu_nopeus <= maksimi_kiihtys*(uusi_aika-alku_aika) && kulunut_matka < (koko_matka-kiihdytys_matka))
         kierrosnopeus=suunta*asetettu_nopeus
         global jarrutus_aika=uusi_aika
-  elseif((kulunut_matka)>=(koko_matka-kiihdytys_matka) && kulunut_matka<koko_matka)
+    elseif((kulunut_matka)>=(koko_matka-kiihdytys_matka) && kulunut_matka<koko_matka)
         kierrosnopeus=suunta*asetettu_nopeus-suunta*maksimi_kiihtys*(uusi_aika-jarrutus_aika)
     end
   elseif(koko_matka<=(2*kiihdytys_matka) && koko_matka>0) # Jos moottori ei kerkeä kiihtymään tavoite nopeuteen
@@ -51,24 +51,50 @@ function fun_moottorin_ajo(haluttu_asema::Float64,uusi_asema::Float64,uusi_aika:
 
   return kierrosnopeus
 end
+#Nykyinen asema,              haluttu asema,         #aika askel, noepusprofiilin nopeus,kiihtyvyys,      , jarrutus
+function position_control(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::FLoat64,aika_askel::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
 
-function moottorien_kierrosnopeus(Fwd::Float64,Bwd::Float64,Torque::Float64,SpeedControl::Float64,Enable::Float64,TargetPos::Float64,TargetSpeed::Float64,TargetAcc::Float64,TargetDec::Float64,TargetTorque::Float64)
-    suunta::Float64
+  kulunut_matka   = abs(alku_asema - nykyinen_asema)
+  koko_matka      = abs(haluttu_asema - alku_asema)
+  kiihdytys_matka = abs(0.5*haluttu_kiihtyvyys*(haluttu_nopeus/haluttu_kiihtyvyys)^2)
+  jarrutus_matka  = abs(0.5*haluttu_jarrutus*(haluttu_nopeus/haluttu_jarrutus)^2)
+  suunta          = sign(haluttu_asema - alku_asema)
 
-    if((Fwd+Bwd)>1 || (Torque+SpeedControl)>1)  #virhe tarkastelua
+  if(koko_matka > (kiihdytys_matka+jarrutus_matka) && koko_matka != 0)
+    if (abs(nopeus) < abs(haluttu_nopeus) && kulunut_matka > (koko_matka-jarrutus_matka) && kulunut_matka < koko_matka)
+      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_kiihtyvyys)
+
+    elseif (abs(nopeus) == abs(haluttu_nopeus) && kulunut_matka < koko_matka)
+      return suunta*abs(nopeus)
+
+    elseif (kulunut_matka >= (koko_matka-jarrutus_matka) && kulunut_matka < koko_matka)
+      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_jarrutus)
+
+    elseif nykyinen_asema == haluttu_asema
       return 0
-    end
-
-    if(Fwd==1)  #liikesuunta
-      suunta=1
-    elseif(Bwd==1)
-      suunta=-1
-    else
-      suunta=0
-    end
-
-    if Torque==0 && SpeedControl==0
 
     end
+  elseif(koko_matka <= (kiihdytys_matka+jarrutus_matka) && koko_matka > 0)
+    if (kulunut_matka < (koko_matka/2))
+      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_kiihtyvyys)
 
+    elseif ((kulunut_matka >= (koko_matka/2)) && kulunut_matka < koko_matka)
+      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_jarrutus)
+
+    end
+  elseif(koko_matka == 0 && kulunut_matka != 0)
+
+
+  end
+
+
+end
+
+function millimetri_kierrosnopeudeksi(nopeus::Float64,nousu::Float64)
+  return (nopeus/nousu)*2*pi)
+end
+
+
+function moottorin_nopeudenmuutos(nyt_nopeus::Float64,aika_askel::Float64,muutosnopeus::Float64)
+    return abs(nyt_nopeus+(muutosnopeus*aika_askel))
 end
