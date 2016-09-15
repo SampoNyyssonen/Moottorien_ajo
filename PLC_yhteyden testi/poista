@@ -1,0 +1,15 @@
+kukko = 0
+
+function kala(makkara::Float64)
+  kukko = 1
+  ahven = 2
+  hauki = 3
+  return makkara*(kukko+ahven+hauki) #6
+end
+
+function koira(ruokaa::Float64)
+
+  kukko = 2
+  saalis = kala(ruokaa)
+  println(saalis)
+end

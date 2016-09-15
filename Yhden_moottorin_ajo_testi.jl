@@ -9,17 +9,18 @@ function plc_mevea_connection()
   conn_plc = accept(server_plc)
 
 
+
   moottorien_ruuvien_nousut = [10,20,20,10,20,10,10,10,0,10,10,20,10,10]        #Kuularuuvin nousu
   moottorien_niemmelisvääntö = [7.3,26,26,7.3,26,7.3,7.3,7.3,7.3,7.3,7.3,26,7.3,7.3]    #moottorin nimellisvääntö
 
-  Tao = 0.01 #Moottoin reaktio nopeus Time Constant
-  Aika_askel = 0.001
+  Tao = 1.0 #Moottoin reaktio nopeus Time Constant
+  aika_askel = 0.001
   Driker = 0.0
-  ninputs_plc = length(moottorien_ruuvien_nousut)*10
-  noutputs_plc = 4*length(moottorien_ruuvien_nousut)
+  #ninputs_plc = length(moottorien_ruuvien_nousut)*10
+  #noutputs_plc = 4*length(moottorien_ruuvien_nousut)
 
   ninputs_mevea = length(moottorien_ruuvien_nousut)*3+1  # Mevea solverista tulevat outputit #Lisätään simulaation aika
-  noutputs_mevea = 0                                      # Mevea solveriin menevät inputit
+  noutputs_mevea = 1                                      # Mevea solveriin menevät inputit
 
   #Mevea yhteyden tarkastaminen
   params=Array{Int32}(3)
@@ -68,7 +69,7 @@ function plc_mevea_connection()
   while isopen(conn_mevea) #Kommunikointi
 
     try
-      ins_plc = round(read(conn_plc,Float64,ninputs_plc),3)
+      ins_plc = round(read(conn_plc,Float64,20),3)
       ins_mevea = round(read(conn_mevea,Float64,ninputs_mevea),3)
       #PLC
       #DI 1.Execute         [0/1]        = Onko moottorille annettu liikkelle käskyä
@@ -99,16 +100,17 @@ function plc_mevea_connection()
       # Vanha versio #AO 1.Motor_speed   [rad/s]      = Moottorin kierrosnopeus
       #AO 1. Motor_torque   [Nm]         = Moottorin vääntö
 
-      ins_matrix_PLC=reshape(ins_plc[1:140],10,14)    #PLC:ltä tulevat yhteydet
+      ins_matrix_PLC=reshape(ins_plc[1:20],10,2)    #PLC:ltä tulevat yhteydet
       ins_matrix_Mevea=reshape(round(ins_mevea[1:(length(ins_mevea)-1)],1),3,14)
       paalla=find(ins_matrix_PLC[5,:])        #Onko moottori paalla. Antaa luettelon mitkä moottorit ovat päällä
       #println(paalla)
 
       for moottori in paalla  #käy jokaisen päällä olevan moottorin läpi
-        if(ins_matrix_PLC[3,moottori] == 1.0)   #Moottorilla on vääntösäätö päällä
-          outs_mevea[1,moottori] = kierrokset_vaannoksi(0.0,ins_matrix_PLC[10,moottori],0.0,ins_matrix_Mevea[3,moottori],Tao,1.0)
+        println("moottori ", moottori, " on päällä. Tiedot:",ins_matrix_Mevea[1,moottori], "mm, ",ins_matrix_Mevea[2,moottori],"mm/s, ",ins_matrix_Mevea[3,moottori],"Nm." )
+      #=  if(ins_matrix_PLC[3,moottori] == 1.0)   #Moottorilla on vääntösäätö päällä
+          outs_mevea[1,moottori] = kierrokset_vaannoksi(0,ins_matrix_PLC[10,moottori],0,ins_matrix_Mevea[3,moottori],Tao,1)
 
-        elseif(ins_matrix_PLC[3,moottori] == 0 && ins_matrix_PLC[4,moottori] == 1) #Nopeusäätöinen moottori
+        elseif(ins_matrix_PLC[3,moottori] == 0.0 & ins_matrix_PLC[4,moottori] == 1.0) #Nopeusäätöinen moottori
           if(ins_matrix_PLC[1,moottori] == 1)
             dire = sign(ins_matrix_PLC[7,moottori])
 
@@ -124,33 +126,41 @@ function plc_mevea_connection()
           end
 
           #Muutetaan kierrokset väännöksi
-          outs_mevea[1,moottori] = kierrokset_vaannoksi(millimetri_kierrosnopeudeksi(ins_matrix_PLC[7,moottori],moottorit[1,moottori]),moottorit[2,moottori],outs_mevea[1,moottori],ins_matrix_Mevea[3,moottori],Tao,0.0)
-
-        elseif(ins_matrix_PLC[3,moottori] == 0 && ins_matrix_PLC[4,moottori] == 0) #Paikkasäätöinen
-
+                    outs_mevea[1,moottori] = kierrokset_vaannoksi(millimetri_kierrosnopeudeksi(ins_matrix_PLC[7,moottori],moottorit[1,moottori]),moottorit[2,moottori],outs_mevea[1,moottori],ins_matrix_Mevea[3,moottori],Tao,0)
+ =#
+        if(ins_matrix_PLC[3,moottori] == 0 && ins_matrix_PLC[4,moottori] == 0) #Paikkasäätöinen
+          println("paikkasäätö")
           Driker_muutos = ins_matrix_PLC[1,moottori] - Driker #Tätä käyetään simuloimaan signaalin nousevaa jalkaa
           #Otetaan alkutilanteen tiedot ylös ajoa varten. Tämä resetoituu aina kun execute on 1 tai moottori on mennyt yli aseman, jolloin se pyrkii menemään samaan asemaan uudestaan.
-          if((ins_matrix_PLC[1,moottori] == 1 && Driker_muutos == 1.0)  || ( abs(ins_matrix_PLC[6,moottori] - moottorit[7,moottori])  - abs(moottorit[7,moottori] - ins_matrix_Mevea[1,moottori])) < 0)
+          if ((ins_matrix_PLC[1,moottori] == 1 && Driker_muutos == 1.0) || ( abs(ins_matrix_PLC[6,moottori] - moottorit[7,moottori])  - abs(moottorit[7,moottori] - ins_matrix_Mevea[1,moottori])) < 0.0)
+            println("alustetaan lähtöä ", Driker_muutos, " ",ins_matrix_PLC[1,moottori] )
             moottorit[3,moottori] = ins_matrix_PLC[6,moottori]
             moottorit[4,moottori] = ins_matrix_PLC[7,moottori]
             moottorit[5,moottori] = ins_matrix_PLC[8,moottori]
             moottorit[6,moottori] = ins_matrix_PLC[9,moottori]
             moottorit[7,moottori] = ins_matrix_Mevea[1,moottori]
             moottorit[8,moottori] = ins_mevea[end]-0.001
+            println("tallennettu ", moottorit[:,moottori])
           end
           Driker = ins_matrix_PLC[1,moottori]
           #Resetoidaan alku_aika jarrutusta varten, jotta jarrutus pystyy aikasuhteelisena. Käytetään samaa muuttujaa, koska halutaan välttää globaaleja muuttujia.
           #Ehto lause on sama kuin position_control function jarrutuksessa.
           if (abs(moottorit[3,moottori]-ins_matrix_Mevea[1,moottori]) <= abs(0.5*moottorit[6,moottori]*(ins_matrix_Mevea[2,moottori]/moottorit[6,moottori])^2))
+            println("jarrutus aika alkaa")
+            println(abs(moottorit[3,moottori]-ins_matrix_Mevea[1,moottori])," ", abs(0.5*moottorit[6,moottori]*(ins_matrix_Mevea[2,moottori]/moottorit[6,moottori])^2))
               moottorit[8,moottori] = ins_mevea[end]-0.001
           end
-                                                  #(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::Float64,alku_aika::Float64,nyt_aika::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
+                                     #(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::Float64,alku_aika::Float64,nyt_aika::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
           outs_mevea[1,moottori] = position_control(ins_matrix_Mevea[1,moottori],moottorit[3,moottori],moottorit[7,moottori],moottorit[8,moottori],ins_mevea[end],ins_matrix_Mevea[2,moottori],moottorit[4,moottori],moottorit[5,moottori],moottorit[6,moottori])
+          println("muutetaan ulos tuloa")
+          println(millimetri_kierrosnopeudeksi(moottorit[4,moottori],moottorit[1,moottori]), " ",moottorit[2,moottori]," ",millimetri_kierrosnopeudeksi(outs_mevea[1,moottori],moottorit[1,moottori])," ",ins_matrix_Mevea[3,moottori]," ",Tao," ",0.0)
+
           outs_mevea[1,moottori] = kierrokset_vaannoksi(millimetri_kierrosnopeudeksi(moottorit[4,moottori],moottorit[1,moottori]),moottorit[2,moottori],millimetri_kierrosnopeudeksi(outs_mevea[1,moottori],moottorit[1,moottori]),ins_matrix_Mevea[3,moottori],Tao,0.0)
+
         end
       end
 
-
+      println("lähetetään mevealle ", outs_mevea)
       write(conn_mevea,outs_mevea)
     catch e
       println("caught an error $e")

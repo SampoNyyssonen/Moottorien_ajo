@@ -51,50 +51,65 @@ function fun_moottorin_ajo(haluttu_asema::Float64,uusi_asema::Float64,uusi_aika:
 
   return kierrosnopeus
 end
-#Nykyinen asema,              haluttu asema,         #aika askel, noepusprofiilin nopeus,kiihtyvyys,      , jarrutus
-function position_control(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::FLoat64,aika_askel::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
+
+
+function position_control(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::Float64,
+                          alku_aika::Float64,nyt_aika::Float64,
+                          nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
 
   kulunut_matka   = abs(alku_asema - nykyinen_asema)
   koko_matka      = abs(haluttu_asema - alku_asema)
   kiihdytys_matka = abs(0.5*haluttu_kiihtyvyys*(haluttu_nopeus/haluttu_kiihtyvyys)^2)
-  jarrutus_matka  = abs(0.5*haluttu_jarrutus*(haluttu_nopeus/haluttu_jarrutus)^2)
+  jarrutus_matka  = abs(0.5*haluttu_jarrutus*(nopeus/haluttu_jarrutus)^2)
   suunta          = sign(haluttu_asema - alku_asema)
+  println(kulunut_matka, " ",koko_matka," ",kiihdytys_matka," ",jarrutus_matka," ",suunta)
 
-  if(koko_matka > (kiihdytys_matka+jarrutus_matka) && koko_matka != 0)
-    if (abs(nopeus) < abs(haluttu_nopeus) && kulunut_matka > (koko_matka-jarrutus_matka) && kulunut_matka < koko_matka)
-      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_kiihtyvyys)
+  if(koko_matka > 0)
+    if (abs(nopeus) < abs(haluttu_nopeus) && abs(haluttu_asema-nykyinen_asema) > jarrutus_matka)
+      println("kiihdytys")
+      return suunta*abs(haluttu_kiihtyvyys*(nyt_aika-alku_aika)) #nopeus on aika riippuvainen, eikä ota huomioon nykyistä nopeutta. Pyrkii pitämään annetussa nopeudessa.
+      #return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_kiihtyvyys)
 
-    elseif (abs(nopeus) == abs(haluttu_nopeus) && kulunut_matka < koko_matka)
-      return suunta*abs(nopeus)
+    elseif (abs(haluttu_asema-nykyinen_asema) <= jarrutus_matka && kulunut_matka < koko_matka)
+      println("jarrutusta")
+      return -1*suunta*abs(haluttu_jarrutus*(nyt_aika-alku_aika)) #nopeus on aika riippuvainen, eikä ota huomioon nykyistä nopeutta. Pyrkii pitämään annetussa nopeudessa.
+      #return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_jarrutus)
 
-    elseif (kulunut_matka >= (koko_matka-jarrutus_matka) && kulunut_matka < koko_matka)
-      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_jarrutus)
+    elseif (abs(nopeus) >= abs(haluttu_nopeus) && abs(haluttu_asema-nykyinen_asema) > jarrutus_matka)
+      println("ajoa")
+      return suunta*abs(haluttu_nopeus)
 
     elseif nykyinen_asema == haluttu_asema
+      println("saavutettu")
       return 0
 
     end
-  elseif(koko_matka <= (kiihdytys_matka+jarrutus_matka) && koko_matka > 0)
-    if (kulunut_matka < (koko_matka/2))
-      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_kiihtyvyys)
-
-    elseif ((kulunut_matka >= (koko_matka/2)) && kulunut_matka < koko_matka)
-      return suunta*moottorin_nopeudenmuutos(nopeus,aika_askel,haluttu_jarrutus)
-
-    end
-  elseif(koko_matka == 0 && kulunut_matka != 0)
-
-
   end
 
 
 end
 
 function millimetri_kierrosnopeudeksi(nopeus::Float64,nousu::Float64)
-  return (nopeus/nousu)*2*pi)
+  println("millimetrit kierrokseiksi")
+  return ((nopeus/nousu)*2*pi)
 end
 
 
 function moottorin_nopeudenmuutos(nyt_nopeus::Float64,aika_askel::Float64,muutosnopeus::Float64)
     return abs(nyt_nopeus+(muutosnopeus*aika_askel))
+end
+
+function kierrokset_vaannoksi(Wref::Float64,Mref::Float64,w::Float64,M::Float64,tao::Float64,kytkin::Float64)
+  println("muuetaan kierrokset väännkösi")
+  if kytkin == 0.0 #kierrosnoepus
+    Kw=Mref/Wref
+    Mmuutos = (Kw*(Wref-w) - M)/tao
+
+  else #vääntö
+    Mmuutos = (Mref-M)/ tao
+
+  end
+
+  return M + Mmuutos
+
 end
