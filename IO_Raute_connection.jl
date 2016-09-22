@@ -31,8 +31,10 @@ function plc_mevea_connection()
 
   write(conn_mevea,params)
 
-  ins_mevea=Array{Float64}(ninputs_mevea)
-  outs_mevea=Array{Float64}(noutputs_mevea)
+  ins_mevea=zeros(ninputs_mevea)
+  outs_mevea=zeros(noutputs_mevea)
+
+  ins_plc=zeros(ninputs_plc)
 
   moottorit = zeros(8,length(moottorien_ruuvien_nousut))
   moottorit[1,:] = moottorien_ruuvien_nousut
@@ -143,6 +145,7 @@ function plc_mevea_connection()
           #Ehto lause on sama kuin position_control function jarrutuksessa.
           if (abs(moottorit[3,moottori]-ins_matrix_Mevea[1,moottori]) <= abs(0.5*moottorit[6,moottori]*(ins_matrix_Mevea[2,moottori]/moottorit[6,moottori])^2))
               moottorit[8,moottori] = ins_mevea[end]-0.001
+              moottorit[4,moottori] = 0
           end
                                                   #(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::Float64,alku_aika::Float64,nyt_aika::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
           outs_mevea[1,moottori] = position_control(ins_matrix_Mevea[1,moottori],moottorit[3,moottori],moottorit[7,moottori],moottorit[8,moottori],ins_mevea[end],ins_matrix_Mevea[2,moottori],moottorit[4,moottori],moottorit[5,moottori],moottorit[6,moottori])

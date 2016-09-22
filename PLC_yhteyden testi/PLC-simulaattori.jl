@@ -49,7 +49,7 @@ function lahetys_komento(portti)
 
   #DO 1.InPosition      [0/1]        = Onko asemassa
   #DO 2.Enable          [0/1]        = Onko moottori käytössä
-  moottori = [1.0,1.0,0.0,0.0,0.0,1.0,300.0,50.0,20.0,-20.0,0.0]
+  moottori = [1.0,1.0,0.0,0.0,0.0,1.0,300.0,100.0,50.0,-50.0,0.0]
   #moottori = [3.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
   write(yhteys2,moottori)
   close(yhteys2)

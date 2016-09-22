@@ -19,9 +19,11 @@ while true
 
         end
     end
-    write(yhteys,reshape(plc,20))
-    #println(plc)
-    if plc[1,1] == -1.0
+    try
+      write(yhteys,reshape(plc,20))
+    catch e
+      println("caught an error $e")
+      close(server)
       close(server)
       break
     end
