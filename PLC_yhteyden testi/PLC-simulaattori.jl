@@ -1,6 +1,7 @@
 function server2_oma(lahetys,kuuntelu)
   notwaiting = true
-  plc = zeros(10,2)
+  mottorien_maara = 3
+  plc = zeros(10,mottorien_maara)
   server1 = listen(5002)
   yhteys1=connect(5003)
   #server2 = listen(5001)
@@ -15,18 +16,20 @@ function server2_oma(lahetys,kuuntelu)
               plc[:,convert(Int64,moottori2[1])] = moottori2[2:11]
               #println(moottori2)
               #println(plc)
-              write(yhteys1,reshape(plc,20))
+              write(yhteys1,reshape(plc,mottorien_maara*10))
               global notwaiting = true
 
           end
       end
-      write(yhteys1,reshape(plc,20))
-      #println(plc)
-      if plc[1,1] == -1.0
-        close(server1)
+      try
+        #println(reshape(plc,30))
+        write(yhteys,reshape(plc,30))
+      catch e
+        println("caught an error $e")
+        close(server)
+        close(server)
         break
       end
-      sleep(0.001) # slow down the loop
   end
   close(server)
 
@@ -49,8 +52,18 @@ function lahetys_komento(portti)
 
   #DO 1.InPosition      [0/1]        = Onko asemassa
   #DO 2.Enable          [0/1]        = Onko moottori käytössä
-  moottori = [1.0,1.0,0.0,0.0,0.0,1.0,300.0,100.0,50.0,-50.0,0.0]
-  #moottori = [3.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
+
+  moottorin_id = 6.0              # 0
+  kytkin = 1.0                    # 1
+  nopeus_säätö = 0.0              # 4
+  matka = 300.0                   # 6
+  nopeus = 60.0                   # 7
+  kiihdytys = sign(nopeus)*20.0   # 8
+  jarrutus = sign(nopeus)*20.0*-1 # 9
+
+
+  moottori = [moottorin_id,kytkin,0.0,0.0,nopeus_säätö,1.0,matka,nopeus,kiihdytys,jarrutus,0.0]
+
   write(yhteys2,moottori)
   close(yhteys2)
 

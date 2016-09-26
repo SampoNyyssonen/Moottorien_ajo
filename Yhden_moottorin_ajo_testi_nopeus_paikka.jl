@@ -1,4 +1,5 @@
 include("moottorien_ajo.jl")
+include("ajo_ohjeet.jl")
 
 function plc_mevea_connection()
   println("Waiting for connection")
@@ -17,15 +18,11 @@ function plc_mevea_connection()
   #Mevea moottorien tiedon määrä
   mevea_rivi = 2
 
-  Tao = 0.01 #Moottoin reaktio nopeus Time Constant
-  Aika_askel = 0.001
-  Edellinen_aika = 0
-  Driker = 0.0
   ninputs_plc = moottorien_maara*10
   noutputs_plc = 4*moottorien_maara
 
   ninputs_mevea = moottorien_maara*mevea_rivi+1           # Mevea solverista tulevat outputit #Lisätään simulaation aika
-  noutputs_mevea = 2                                      # Mevea solveriin menevät inputit
+  noutputs_mevea = moottorien_maara*2                                      # Mevea solveriin menevät inputit
 
   #Mevea yhteyden tarkastaminen
   params=Array{Int32}(3)
@@ -42,7 +39,13 @@ function plc_mevea_connection()
 
   ins_plc=zeros(ninputs_plc)
 
-  moottorit = zeros(13,moottorien_maara)
+  Tao = 0.005 #Moottoin reaktio nopeus Time Constant
+  Aika_askel = 0.001
+  Edellinen_aika = 0
+  Driker = 0.0
+  alusta = 0.0
+
+  moottorit = zeros(17,moottorien_maara)
   moottorit[1,:] = moottorien_ruuvien_nousut
   moottorit[2,:] = moottorien_max_kierrosnopeus
   #Moottorit tiedot:
@@ -58,7 +61,11 @@ function plc_mevea_connection()
       # 10.Profiilin nopeus                   [mm/s]
       # 11.PIDintegral
       # 12.PIDerror_prior
-      # 13.Edellinwen PIDerror
+      # 13.PID lisä
+      # 14.Jarrutus                          [0/1]
+      # 15.Jarrutus matka                    [mm]
+      # 16.Driker                            [0/1]
+      # 17.Nopeus vai paikkas                [0/1]
 
   # Moottorien järjestys:
       # 1. Stepfeeder carriage
@@ -111,86 +118,147 @@ function plc_mevea_connection()
       # Vanha versio #AO 1.Motor_speed   [rad/s]      = Moottorin kierrosnopeus
       #AO 1. Motor_torque   [Nm]         = Moottorin vääntö
       aika_askel = ins_mevea[end] - Edellinen_aika
+      #println(ins_mevea[end])
+      if ins_mevea[end] < 2.0
+        alusta = 1.0
+      end
+
       if aika_askel >= Tao
-        ins_matrix_PLC=reshape(ins_plc[1:20],10,2)    #PLC:ltä tulevat yhteydet
-        ins_matrix_Mevea=reshape(round(ins_mevea[1:(length(ins_mevea)-1)],1),mevea_rivi,14)
+        ins_matrix_PLC=reshape(ins_plc[1:ninputs_plc],10,moottorien_maara)    #PLC:ltä tulevat yhteydet
+        ins_matrix_Mevea=reshape(round(ins_mevea[1:(length(ins_mevea)-1)],1),mevea_rivi,moottorien_maara)
         paalla=find(ins_matrix_PLC[5,:])        #Onko moottori paalla. Antaa luettelon mitkä moottorit ovat päällä
-        #println(paalla)
+        #println(ins_matrix_PLC[1,:])
 
-        for moottori_id in paalla  #käy jokaisen päällä olevan moottorin läpi
+        if alusta == 1.0      #Alustetaan moottotreille lähtöasema
+        #  println("alustetaan")
+          moottorit[7,:] = ins_matrix_Mevea[1,:]
+          alusta =0.0
+        end
+
+       for moottori_id in paalla  #käy jokaisen päällä olevan moottorin läpi
           moottori = moottorit[:,moottori_id]
-          println("moottori ", moottori_id, " on päällä. Tiedot:",ins_matrix_Mevea[1,moottori_id], "mm, ",ins_matrix_Mevea[2,moottori_id],"mm/s")
-        #=  if(ins_matrix_PLC[3,moottori] == 1.0)   #Moottorilla on vääntösäätö päällä
-             outs_mevea[1,moottori] = 0 #Vääntösäätö ei ole vielä mahdollista
+          Driker_muutos = ins_matrix_PLC[1,moottori_id] - moottori[16] #Tätä käyetään simuloimaan signaalin nousevaa jalkaa
+          Asetusmuutoos_muutos = ins_matrix_PLC[4,moottori_id] - moottori[17]
+          moottori[16] = ins_matrix_PLC[1,moottori_id]
+          moottori[17] = ins_matrix_PLC[4,moottori_id]
+        #  println("moottori ", moottori_id, " on päällä. Tiedot:",ins_matrix_Mevea[1,moottori_id], "mm, ",ins_matrix_Mevea[2,moottori_id],"mm/s")
+          if(ins_matrix_PLC[3,moottori_id] == 1.0)   #Moottorilla on vääntösäätö päällä
+             outs_mevea[(moottori_id*2)-1] = 0 #Vääntösäätö ei ole vielä mahdollista
+             outs_mevea[moottori_id*2] = 0 #Vääntösäätö ei ole vielä mahdollista
 
+          elseif(ins_matrix_PLC[3,moottori_id] == 0 && ins_matrix_PLC[4,moottori_id] == 1) #Nopeusäätöinen moottori
+            println("nopeus säätö")
+            if(ins_matrix_PLC[1,moottori_id] == 1.0)
+              if Driker_muutos == 1.0 || Asetusmuutoos_muutos == 1.0
+                println("alustetaan")
+                moottori[9] = millimetrinopeus_kierrosnopeudeksi(ins_matrix_Mevea[2,moottori_id],moottori[1])
+                moottori[10] = ins_matrix_Mevea[2,moottori_id]
+                moottori[11] = 0.0
+                moottori[12] = 0.0
+                moottori[13] = 0.0
+                moottori[14] = 0.0
+              end
 
-          elseif(ins_matrix_PLC[3,moottori] == 0 && ins_matrix_PLC[4,moottori] == 1) #Nopeusäätöinen moottori
-            if(ins_matrix_PLC[1,moottori] == 1)
-              dire = sign(ins_matrix_PLC[7,moottori])
+              if moottori[10] == ins_matrix_PLC[7,moottori_id] #Jos sama nopeus kun vaadittu
 
-              if ins_matrix_Mevea[2,moottori] == ins_matrix_PLC[7,moottori] #Jos sama nopeus kun vaadittu
-                outs_mevea[1,moottori] = dire*millimetri_kierrosnopeudeksi(ins_matrix_PLC[7,moottori],moottorit[1,moottori]) #Lähetetään sama kierrosnopeus takas
+                moottori[10] = ins_matrix_PLC[7,moottori_id]
 
-              elseif abs(ins_matrix_Mevea[2,moottori]) < abs(ins_matrix_PLC[7,moottori])
-                outs_mevea[1,moottoir] = dire*millimetri_kierrosnopeudeksi(moottorin_nopeudenmuutos(ins_matrix_Mevea[2,moottori],aika_askel,ins_matrix_PLC[8,moottori]),moottorit[1,moottori])
+              elseif moottori[10] < ins_matrix_PLC[7,moottori_id]
+
+                moottori[10] += abs(ins_matrix_PLC[8,moottori_id])*aika_askel
+
+              elseif moottori[10] > ins_matrix_PLC[7,moottori_id]
+
+                moottori[10] += abs(ins_matrix_PLC[9,moottori_id])*aika_askel*-1
+
               end
             else
-              dire = sign(ins_matrix_PLC[9,moottori])
-              outs_mevea[1,moottori] = dire*millimetri_kierrosnopeudeksi(moottorin_nopeudenmuutos(ins_matrix_Mevea[2,moottori],aika_askel,ins_matrix_PLC[9,moottori]),moottorit[1,moottori]) # lähetetään jarrutus kierrosnopeus takaisin
-            end
 
-            #Muutetaan kierrokset väännöksi
-            outs_mevea[1,moottori] = kierrokset_vaannoksi(millimetri_kierrosnopeudeksi(ins_matrix_PLC[7,moottori],moottorit[1,moottori]),moottorit[2,moottori],outs_mevea[1,moottori],ins_matrix_Mevea[3,moottori],Tao,0.0)
+              #moottori[10] += ins_matrix_PLC[9,moottori_id]*aika_askel
 
-    else=#if(ins_matrix_PLC[3,moottori_id] == 0 && ins_matrix_PLC[4,moottori_id] == 0) #Paikkasäätöinen
-            println("paikkasäätö")
-            Driker_muutos = ins_matrix_PLC[1,moottori_id] - Driker #Tätä käyetään simuloimaan signaalin nousevaa jalkaa
-            #Otetaan alkutilanteen tiedot ylös ajoa varten. Tämä resetoituu aina kun execute on 1 tai moottori on mennyt yli aseman, jolloin se pyrkii menemään samaan asemaan uudestaan.
-            if((ins_matrix_PLC[1,moottori_id] == 1 && Driker_muutos == 1.0)  || ( abs(ins_matrix_PLC[6,moottori_id] - moottori[7])  - abs(moottori[7] - ins_matrix_Mevea[1,moottori_id])) < 0)
-              println("alustetaan lähtöä arvoilla: ","Haluttu arvot:",ins_matrix_PLC[6,moottori_id],"mm ",ins_matrix_PLC[7,moottori_id],"mm/s ",ins_matrix_PLC[8,moottori_id],"mm/s2 ",ins_matrix_PLC[9,moottori_id],"mm/s2. Lähtöarvot:",ins_matrix_Mevea[1,moottori_id],"mm ",ins_mevea[end]-0.001,"s." )
-              println(moottori)
-              suunta = sign(ins_matrix_PLC[6,moottori_id] - ins_matrix_Mevea[1,moottori_id])
-              if suunta != sign(ins_matrix_PLC[7,moottori_id])
-                moottori[4] = -1*ins_matrix_PLC[7,moottori_id]
-                moottori[5] = -1*ins_matrix_PLC[8,moottori_id]
-                moottori[6] = -1*ins_matrix_PLC[9,moottori_id]
+              if abs(moottori[10]) > 0.05
+                moottori[10] += abs(ins_matrix_PLC[9,moottori_id])*aika_askel*-1*sign(moottori[10])
               else
-                moottori[4] = ins_matrix_PLC[7,moottori_id]
-                moottori[5] = ins_matrix_PLC[8,moottori_id]
-                moottori[6] = ins_matrix_PLC[9,moottori_id]
+                moottori[10] = 0
               end
-                moottori[3] = ins_matrix_PLC[6,moottori_id]
-                moottori[7] = ins_matrix_Mevea[1,moottori_id]
-                moottori[8] = ins_mevea[end]-0.001
+
             end
-            println(moottori)
-            Driker = ins_matrix_PLC[1,moottori_id]
-            #Resetoidaan alku_aika jarrutusta varten, jotta jarrutus pystyy aikasuhteelisena. Käytetään samaa muuttujaa, koska halutaan välttää globaaleja muuttujia.
-            #Ehto lause on sama kuin position_control function jarrutuksessa.
-            #if (abs(moottori[3]-ins_matrix_Mevea[1,moottori_id]) <= abs(0.5*moottori[6,moottori_id]*(ins_matrix_Mevea[2,moottori_id]/moottori[6])^2))
-            #    moottori[8] = ins_mevea[end]-0.001
-            #    moottori[4] = 0
-          #  end
-                                                    #(nykyinen_asema::Float64,haluttu_asema::Float64,alku_asema::Float64,alku_aika::Float64,nyt_aika::Float64,nopeus::Float64,haluttu_nopeus::Float64,haluttu_kiihtyvyys::Float64,haluttu_jarrutus::Float64)
-            #outs_mevea[1,moottori] =  position_control_timestep(ins_matrix_Mevea[1,moottori],moottorit[3,moottori],moottorit[7,moottori],moottorit[8,moottori],ins_mevea[end],aika_askel,ins_matrix_Mevea[2,moottori],moottorit[4,moottori],moottorit[5,moottori],moottorit[6,moottori])
-            #outs_mevea[1,moottori] =  position_control(ins_matrix_Mevea[1,moottori],moottorit[3,moottori],moottorit[7,moottori],moottorit[8,moottori],ins_mevea[end],ins_matrix_Mevea[2,moottori],moottorit[4,moottori],moottorit[5,moottori],moottorit[6,moottori])
-            println("määritetään nopeus")
 
-            outs_mevea[1],outs_mevea[2] = speed_profile(moottori,
-                                  ins_mevea[end], aika_askel,
-                                  ins_matrix_Mevea[1,moottori_id],
-                                  ins_matrix_Mevea[2,moottori_id])
+            moottori[13] += pid_saadin(moottori,moottori[9],millimetrinopeus_kierrosnopeudeksi(ins_matrix_Mevea[2,moottori_id],moottori[1]),aika_askel)
 
-            println("nopeus: ",outs_mevea[1,moottori_id],"mm/s. Kierrosnpeus:  ", millimetrinopeus_kierrosnopeudeksi(outs_mevea[1,moottori_id],moottori[1]),"rad/s")
-            outs_mevea[1] = millimetrinopeus_kierrosnopeudeksi(outs_mevea[1],moottori[1])
-            outs_mevea[2] = millimetrinopeus_kierrosnopeudeksi(outs_mevea[2],moottori[1])
-            moottori[9] = ins_matrix_Mevea[2,moottori_id]
+            if moottori[9] == 0 || moottori[10] == 0
+              moottori[11] = 0
+              moottori[12] = 0
+              moottori[13] = 0
+            elseif abs(moottori[13]) > 30.0
+              println("Pysähtynyt")
+              moottori[10] = 0
+              ins_matrix_PLC[6,moottori_id] = ins_matrix_Mevea[1,moottori_id]
+              nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],0.0)
+            end
+
+            moottori[9] = millimetrinopeus_kierrosnopeudeksi(moottori[10],moottori[1])
+            outs_mevea[(moottori_id*2)-1] = moottori[9] + moottori[13]
+            outs_mevea[moottori_id*2] = outs_mevea[(moottori_id*2)-1]
+
+
+          elseif(ins_matrix_PLC[3,moottori_id] == 0 && ins_matrix_PLC[4,moottori_id] == 0) #Paikkasäätöinen
+            #println("paikkasäätö")
+            #Otetaan alkutilanteen tiedot ylös ajoa varten. Tämä resetoituu aina kun execute on 1 tai moottori on mennyt yli aseman, jolloin se pyrkii menemään samaan asemaan uudestaan.
+          #  println("Matka - kuljettu: ",(abs(moottori[3]  - moottori[7])  - abs(moottori[7] - ins_matrix_Mevea[1,moottori_id])), "mm. PID Interger: ",moottori[13],". PID ero: ",moottori[12],"muutos: ",Driker_muutos)
+            if Driker_muutos == 1.0 || Asetusmuutoos_muutos == 1.0
+            #if(ins_matrix_PLC[1,moottori_id] == 1 && Driker_muutos == 1.0)
+            #  println("alustetaan lähtöä arvoilla: ","Haluttu arvot:",ins_matrix_PLC[6,moottori_id],"mm ",ins_matrix_PLC[7,moottori_id],"mm/s ",ins_matrix_PLC[8,moottori_id],"mm/s2 ",ins_matrix_PLC[9,moottori_id],"mm/s2. Lähtöarvot:",ins_matrix_Mevea[1,moottori_id],"mm ",ins_mevea[end]-0.001,"s." )
+            #  println(moottori)
+              nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],1.0)
+
+            elseif (abs(moottori[3] - moottori[7])  - abs(moottori[7] - ins_matrix_Mevea[1,moottori_id])) < -0.1
+              println("yli")
+              nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],0.0)
+            end
+
+          #  println("määritetään nopeus")
+
+            #outs_mevea[1],outs_mevea[2] = speed_profile(moottori,
+            #                      ins_mevea[end], aika_askel,
+            ##                      ins_matrix_Mevea[1,moottori_id],
+            #                      ins_matrix_Mevea[2,moottori_id])
+            #
+            #println("nopeus: ",outs_mevea[1,moottori_id],"mm/s. Kierrosnpeus:  ", millimetrinopeus_kierrosnopeudeksi(outs_mevea[1,moottori_id],moottori[1]),"rad/s")
+            #outs_mevea[2] = millimetrinopeus_kierrosnopeudeksi(outs_mevea[2],moottori[2])
+            #outs_mevea[1] = millimetrinopeus_kierrosnopeudeksi(outs_mevea[1],moottori[1])
+            #outs_mevea[1] = 25
+            #moottori[9] = ins_matrix_Mevea[2,moottori_id]
             #moottori[10] = ins_matrix_Mevea[2,moottori_id]
-            moottorit[:,moottori_id] = moottori
+            #moottorit[:,moottori_id] = moottori
+          #  println(round((ins_mevea[end]-moottori[8])/Tao))
+
+            moottori[13] += pid_saadin(moottori,moottori[9],millimetrinopeus_kierrosnopeudeksi(ins_matrix_Mevea[2,moottori_id],moottori[1]),aika_askel)
+
+
+            println("Lisä: ",moottori[13]," edellelinen haluttu: ",moottori[9],"rad/s. Saavutettu: ",millimetrinopeus_kierrosnopeudeksi(ins_matrix_Mevea[2,moottori_id],moottori[1]),"rad/s. aika_askel: ",aika_askel,"s. Aika: ",ins_mevea[end])
+            if abs(moottori[13]) > 100.0
+             println("Pysähtynyt")
+             ins_matrix_PLC[6,moottori_id] = ins_matrix_Mevea[1,moottori_id]
+             nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],1.0)
+            end
+
+            moottori[9] = millimetrinopeus_kierrosnopeudeksi(speed_profile(moottori,ins_mevea[end],aika_askel,ins_matrix_Mevea[1,moottori_id],ins_matrix_Mevea[2,moottori_id]),moottori[1])
+
+            if moottori[9] == 0
+              moottori[11] = 0
+              moottori[12] = 0
+              moottori[13] = 0
+            end
+            outs_mevea[(moottori_id*2)-1] = moottori[9] + moottori[13]
+            outs_mevea[moottori_id*2] = outs_mevea[(moottori_id*2)-1]
+            #outs_mevea[3] = moottori[13]
           end
-        end
+        println("lähetetään mevealle: ", outs_mevea[moottori_id*2])
+        moottorit[:,moottori_id] = moottori
+      end
         Edellinen_aika = ins_mevea[end]
-        println("lähetetään mevealle: ", outs_mevea)
+        #println("lähetetään mevealle: ", outs_mevea)
       end
       write(conn_mevea,outs_mevea)
     catch e

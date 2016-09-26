@@ -1,4 +1,4 @@
-yhteys2= connect(5001)
+yhteys2= connect(5002)
 #DI 1.Execute         [0/1]        = Onko moottorille annettu liikkelle käskyä
 #DI 2.Reserve         [0/1]        = Tyhjä
 #DI 3.Torque          [0/1]        = Jos 0, nii lukee 4 rivin tiedot. Jos 1, niin moottori muuttuu torque säätöiseksi. Tämä vaikka kesken ajon
@@ -13,7 +13,17 @@ yhteys2= connect(5001)
 
 #DO 1.InPosition      [0/1]        = Onko asemassa
 #DO 2.Enable          [0/1]        = Onko moottori käytössä
-moottori = [1.0,1.0,0.0,0.0,0.0,1.0,300.0,50.0,20.0,-20.0,0.0]
+moottorin_id = 4.0              # 0
+kytkin = 1.0                    # 1
+nopeus_säätö = 0.0              # 4
+matka = 300.0                   # 6
+nopeus = 20.0                   # 7
+kiihdytys = sign(nopeus)*20.0   # 8
+jarrutus = sign(nopeus)*20.0*-1 # 9
+
+
+moottori = [moottorin_id,kytkin,0.0,0.0,nopeus_säätö,1.0,matka,nopeus,kiihdytys,jarrutus,0.0]
+
 #moottori = [3.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
 write(yhteys2,moottori)
 close(yhteys2)
