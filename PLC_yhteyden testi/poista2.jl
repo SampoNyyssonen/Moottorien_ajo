@@ -1,6 +1,6 @@
 notwaiting = true
 moottorein_maara = 14
-plc = zeros(10,moottorein_maara)
+plc = zeros(10,moottorein_maara+1)
 server = listen(5002)
 yhteys=connect(5003)
 #server2 = listen(5001)
@@ -12,17 +12,21 @@ while true
         @async begin
             sock = accept(server)
             moottori2 = read(sock, Float64, 11)
-            plc[:,convert(Int64,moottori2[1])] = moottori2[2:11]
+            if moottori2[1] <= moottorein_maara
+              plc[:,convert(Int64,moottori2[1])] = moottori2[2:11]
+            elseif moottori2[1] > moottorein_maara
+              plc[(convert(Int64,moottori2[1])-moottorein_maara),15] = moottori2[2]
+            end
             #println(moottori2)
             #println(plc[1,:])
-            write(yhteys,reshape(plc,moottorein_maara*10))
+            write(yhteys,reshape(plc,(moottorein_maara+1)*10))
             global notwaiting = true
 
         end
     end
     try
       #println(reshape(plc,30))
-      write(yhteys,reshape(plc,moottorein_maara*10))
+      write(yhteys,reshape(plc,(moottorein_maara +1 )*10))
     catch e
       println("caught an error $e")
       close(server)

@@ -13,6 +13,23 @@ yhteys2= connect(5002)
 
 #DO 1.InPosition      [0/1]        = Onko asemassa
 #DO 2.Enable          [0/1]        = Onko moottori käytössä
+
+# Moottorien järjestys:
+    # 1. Stepfeeder carriage
+    # 2. Linearfeeder carriage
+    # 3. X-carriage L
+    # 4. Y-carriage L
+    # 5. X-carriage R
+    # 6. Y-carriage R
+    # 7. Charger spindle L
+    # 8. Charger spindle R
+    # 9. Charger shaft L
+    # 10.Clamp L
+    # 11.Clamp R
+    # 12.ArmSlider R
+    # 13.Lathe spindle L
+    # 14.Lathe spindle R
+
 moottorin_id = 4.0              # 0
 kytkin = 1.0                    # 1
 nopeus_säätö = 0.0              # 4
