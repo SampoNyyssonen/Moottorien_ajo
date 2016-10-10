@@ -27,6 +27,8 @@ while true
     try
       #println(reshape(plc,30))
       write(yhteys,reshape(plc,(moottorein_maara +1 )*10))
+      ins_plc2 = read(yhteys,Float64,60)
+      #println(ins_plc2[1:4])
     catch e
       println("caught an error $e")
       close(server)

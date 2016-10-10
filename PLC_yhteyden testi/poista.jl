@@ -26,21 +26,21 @@ yhteys2= connect(5002)
     # 9. Charger shaft L
     # 10.Clamp L
     # 11.Clamp R
-    # 12.ArmSlider R
+    # 12.ArmSlider
     # 13.Lathe spindle L
     # 14.Lathe spindle R
 
-moottorin_id = 4.0              # 0
+moottorin_id = 12.0              # 0
 kytkin = 1.0                    # 1
 nopeus_säätö = 0.0              # 4
-matka = 300.0                   # 6
-nopeus = 20.0                   # 7
-kiihdytys = sign(nopeus)*20.0   # 8
+matka = 100.0                   # 6
+nopeus = 50.0                   # 7
+kiihdytys = sign(nopeus)*80.0   # 8
 jarrutus = sign(nopeus)*20.0*-1 # 9
 
 
-moottori = [moottorin_id,kytkin,0.0,0.0,nopeus_säätö,1.0,matka,nopeus,kiihdytys,jarrutus,0.0]
-
+#moottori = [moottorin_id,kytkin,0.0,0.0,nopeus_säätö,1.0,matka,nopeus,kiihdytys,jarrutus,0.0]
+moottori = 1.0
 #moottori = [3.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
 write(yhteys2,moottori)
 close(yhteys2)
