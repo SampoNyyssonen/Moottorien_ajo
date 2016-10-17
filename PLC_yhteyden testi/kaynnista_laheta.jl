@@ -1,4 +1,4 @@
-yhteys2= connect(5002)
+
 #DI 1.Execute         [0/1]        = Onko moottorille annettu liikkelle käskyä
 #DI 2.Reserve         [0/1]        = Tyhjä
 #DI 3.Torque          [0/1]        = Jos 0, nii lukee 4 rivin tiedot. Jos 1, niin moottori muuttuu torque säätöiseksi. Tämä vaikka kesken ajon
@@ -30,17 +30,20 @@ yhteys2= connect(5002)
     # 13.Lathe spindle L
     # 14.Lathe spindle R
 
-moottorin_id = 1.0              # 0
-kytkin = 1.0                    # 1
-nopeus_säätö = 0.0              # 4
-matka = 300.0                   # 6
-nopeus = 50.0                   # 7
-kiihdytys = sign(nopeus)*80.0   # 8
-jarrutus = sign(nopeus)*20.0*-1 # 9
+    #oletusportti on 5002
 
+function kaynnista(portti)
+  yhteys_kaynnista= connect(portti)
+  moottori = [-1.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
+  write(yhteys_kaynnista,moottori)
+  close(yhteys_kaynnista)
 
-moottori = [moottorin_id,kytkin,0.0,0.0,nopeus_säätö,1.0,matka,nopeus,kiihdytys,jarrutus,0.0]
-#moottori = 1.0
-#moottori = [3.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
-write(yhteys2,moottori)
-close(yhteys2)
+end
+    #oletusportti on 5002
+function yksittainen_suotto(portti2,moottori_id,kytkin,nopeus_saato,matka,nopeus,kiihdytys,jarrutus)
+  moottori23 = [moottori_id,kytkin,0.0,0.0,nopeus_saato,1.0,matka,nopeus,sign(nopeus)*abs(kiihdytys),-1*sign(nopeus)*abs(jarrutus),0.0]
+  yhteys_yksi= connect(portti2)
+  write(yhteys_yksi,moottori23)
+  close(yhteys_yksi)
+
+end
