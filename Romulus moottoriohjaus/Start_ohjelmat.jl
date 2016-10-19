@@ -34,7 +34,7 @@
 
 function kaynnista_automaatti(portti)
   yhteys_kaynnista= connect(portti)
-  moottori = [-1.0,0.0,0.0,0.0,1.0,1.0,60.0,20.0,10.0,-5.0,0.0]
+  moottori = [-1.0]
   write(yhteys_kaynnista,moottori)
   close(yhteys_kaynnista)
 

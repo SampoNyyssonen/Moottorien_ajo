@@ -1,7 +1,7 @@
 function ajo_ohjelma()
 
 
-  #notwaiting = true
+  notwaiting = true
   moottorein_maara = 14
   plc = zeros(10,moottorein_maara+1)
   ins_plc2 = zeros(4,15)
@@ -15,15 +15,8 @@ function ajo_ohjelma()
           notwaiting = false
           @async begin
               sock = accept(server)
-              moottori2 = read(sock, Float64, 11)
-              println(moottori2)
-              if moottori2[1] <= moottorein_maara && moottori2[1] > 0
-                #kaynnista = 0.0
-                plc[:,convert(Int64,moottori2[1])] = moottori2[2:11]
-              elseif moottori2[1] > moottorein_maara
-                #kaynnista = 0.0
-                plc[(convert(Int64,moottori2[1])-moottorein_maara),15] = moottori2[2]
-              elseif moottori2[1] == -1.0
+              moottori2 = read(sock, Float64, 1)
+              if moottori2[1] == -1.0
                 kaynnista = 1.0
               end
               notwaiting = true
@@ -145,7 +138,7 @@ function  aloita_ajo(run_plc_in::Array,run_plc_out::Array)
     run_plc_out[1,12] = 0
   elseif run_plc_in[3,3] > 964.0 && run_plc_in[3,3] < 967.0 && run_plc_in[3,12] > 1115.5 && run_plc_in[3,10] > 480.0
     run_plc_out[:,12] = ArmSlider_RL_start
-  elseif run_plc_in[4,10] < 0.05 && run_plc_in[3,10] < 270.0 && run_plc_in[3,7] < 100.0  && run_plc_in[3,7] > 70.0
+  elseif run_plc_in[4,10] < 0.05 && run_plc_in[3,10] < 270.0 && run_plc_in[3,7] < 100.0  && run_plc_in[3,12] < 32.0
     run_plc_out[:,12] = ArmSlider_RL_down
   end
 
@@ -158,13 +151,14 @@ function  aloita_ajo(run_plc_in::Array,run_plc_out::Array)
   elseif run_plc_in[3,12] < 32.0 && run_plc_in[4,12] < 0.05
     run_plc_out[:,10] = Clamp_in
     run_plc_out[:,11] = Clamp_in
-  elseif run_plc_in[3,12] > 1190.0 && run_plc_in[4,12] < 0.0 && run_plc_in[3,13] > 330.0 && run_plc_in[4,13] < 0.05
+  elseif run_plc_in[3,12] > 1190.0 && run_plc_in[4,12] < 0.0 && run_plc_in[3,13] > 315.0 && run_plc_in[4,13] < 0.05
     run_plc_out[:,10] = Clamp_out
     run_plc_out[:,11] = Clamp_out
   end
 
   # 13.Lathe spindle L && 14.Lathe spindle R
-  Lathe_spindle_start =  [1.0,0.0,0.0,0.0,1.0,344.0,maks_nopeus,100.0,-50.0,0.0]
+  Lathe_spindle_start =  [1.0,0.0,0.0,0.0,1.0,320.0,maks_nopeus,100.0,-50.0,0.0]
+
   if run_plc_out[1,13] == 1 || run_plc_out[1,14] == 1
     run_plc_out[1,13] = 0
     run_plc_out[1,14] = 0
