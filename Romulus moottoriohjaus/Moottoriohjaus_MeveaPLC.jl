@@ -1,26 +1,14 @@
 include("moottorien_ajo_funktiot.jl")
+include("Lähtöarvot.jl")
 
 function plc_mevea_connection()
   println("Waiting for connection")
-  server_mevea = listen(5112)                                                   # Avataan Modelerissa asetettu portti #listen(ip"127.0.0.1",2000)
-  server_plc = listen(5003)                                                     # Avataan plcn yhteys.
+  server_mevea = listen(Mevea_solver_portti)                                                   # Avataan Modelerissa asetettu portti #listen(ip"127.0.0.1",2000)
+  server_plc = listen(Moottori_ohjaus_portti)                                                     # Avataan plcn yhteys.
 
   conn_mevea = accept(server_mevea)
   conn_plc = accept(server_plc)
 
-
-  moottorien_maara = 14                                                         #Tämä on määrä moottoreista jota ohjataan tämän ohjaimen avulla.
-  antureiden_maara = 4                                                          # 2 * onko pölli asemassa ja 2 * kuinka paksu pölli on
-  venttiilien_maara = 2
-
-  #Mevea moottorien tiedon määrä: paikka ja nopeus
-  mevea_rivi = 2
-
-  ninputs_plc = (moottorien_maara + 1)*10                                       # PLC:n lähettämä datan määrä. Moottorit + venttiilin ohjaus. Viimeisessä matriisi sarakkeessa on venttiili ohjaus
-  noutputs_plc = moottorien_maara + antureiden_maara/4                          #Kuinka monta saraketta PLClle lähetetään. Moottorit + anturit.
-
-  ninputs_mevea = moottorien_maara*mevea_rivi + 1 + antureiden_maara            # Mevea solverista tulevat outputit #Lisätään simulaation aika
-  noutputs_mevea = moottorien_maara*2 + 1                                       # Mevea solveriin menevät inputit
 
   #Mevea yhteyden tarkastaminen
   params=Array{Int32}(3)
@@ -36,17 +24,13 @@ function plc_mevea_connection()
   outs_mevea=zeros(noutputs_mevea)
 
   ins_plc=zeros(ninputs_plc)
-  outs_plc=zeros(4,convert(Int64,noutputs_plc))
+  outs_plc=zeros(4,noutputs_plc)
 
-  Tao = 0.005 #Moottoin reaktio nopeus Time Constant
   Aika_askel = 0.001
   Edellinen_aika = 0
   Driker = 0.0
   alusta = 0.0
-  PID_saadin = 1.0 # Jos PID säädin on päällä, on arvo 1, muuten 0.
 
-  pyorivat_moottorit = [9] #Mitkä moottorit ovat pyöriviä
-  pyorivan_moottorin_kehapituus = 2*pi*30 # Pyörivän moottorin kehapituus
 
   moottorit = zeros(16,moottorien_maara) #Jokaisesta moottorista talletetaan 16 tietoa.
   #Moottorit tiedot:
@@ -67,21 +51,28 @@ function plc_mevea_connection()
       # 15.Jarrutus matka                    [mm]
       # 16.Driker                            [0/1]
 
-  # Moottorien järjestys:
-      # 1. Stepfeeder carriage
-      # 2. Linearfeeder carriage
-      # 3. X-carriage L
-      # 4. Y-carriage L
-      # 5. X-carriage R
-      # 6. Y-carriage R
-      # 7. Charger spindle L
-      # 8. Charger spindle R
-      # 9. Charger shaft L
-      # 10.Clamp L
-      # 11.Clamp R
-      # 12.ArmSlider
-      # 13.Lathe spindle L
-      # 14.Lathe spindle R
+      # Moottorien järjestys:
+          # 1. Stepfeeder carriage
+          # 2. Linearfeeder carriage
+          # 3. X-carriage L
+          # 4. Y-carriage L
+          # 5. X-carriage R
+          # 6. Y-carriage R
+          # 7. Charger spindle L
+          # 8. Charger spindle R
+          # 9. Charger shaft L
+          # 10.Clamp L
+          # 11.Clamp R
+          # 12.ArmSlider
+          # 13.Lathe spindle L
+          # 14.Lathe spindle R
+          # 15.Back up frame
+          # 16.Back up frame roll
+          # 17.Trunnion bearing
+          # 18.Round bar carriage
+          # 19.Knife round bar
+          # 20.Lathe shaft 
+
 
   println("Connection established") #Odotetaan Mevean reaktiota
   while isopen(conn_mevea) #Kommunikointi
@@ -141,7 +132,7 @@ function plc_mevea_connection()
 
        for moottori_id in paalla  #käy jokaisen päällä olevan moottorin läpi
           moottori = moottorit[:,moottori_id] #Otetaan jokainen moottori erikseen käsittelyyn
-
+          pyoriva = findfirst(pyorivat_moottorit,moottori_id)
           #pyöriville moottotreille
           Driker_muutos = ins_matrix_PLC[1,moottori_id] - moottori[16]          #Tätä käyetään simuloimaan signaalin nousevaa jalkaa
           Asetusmuutoos_muutos = ins_matrix_PLC[4,moottori_id] - moottori[2]    #aseman ja nopeuden välinen trikkeri
@@ -187,11 +178,10 @@ function plc_mevea_connection()
 
             end
 
-
             if   PID_saadin == 1 #PID säädin nopeudelle.
               moottori[13] += pid_saadin(moottori,moottori[9],ins_matrix_Mevea[2,moottori_id],aika_askel) # Lisätty nopeus määrä jotta moottori pysyy nopeudessa
 
-              if abs(moottori[13]) > 50.0 && 0 == findfirst(pyorivat_moottorit,moottori_id) # Jos lisätty nopeus alkaa olemaan liian suuri tai moottori on pyörivä.
+              if abs(moottori[13]) > 50.0 && 0 == pyoriva# Jos lisätty nopeus alkaa olemaan liian suuri tai moottori on pyörivä.
               #  println("Pysähtynyt")
                 moottori[10] = 0
                 nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],0.0) # Nollataan kaikki.
@@ -218,8 +208,8 @@ function plc_mevea_connection()
             #println("Matka - kuljettu: ",(abs(moottori[3]  - moottori[7])  - abs(moottori[7] - ins_matrix_Mevea[1,moottori_id])), "mm. PID Interger: ",moottori[13],". PID ero: ",moottori[12],"muutos: ",Driker_muutos)
             if Driker_muutos == 1.0 || (Asetusmuutoos_muutos == -1.0 && moottori[16] ==1)
               moottori[1] = 0
-              if 1 == findfirst(pyorivat_moottorit,moottori_id)
-                ins_matrix_PLC[6,moottori_id] = pyorimsmatka(ins_matrix_PLC[6,moottori_id],ins_matrix_Mevea[1,moottori_id],pyorivan_moottorin_kehapituus)
+              if 0 != pyoriva
+                ins_matrix_PLC[6,moottori_id] = pyorimsmatka(ins_matrix_PLC[6,moottori_id],ins_matrix_Mevea[1,moottori_id],pyorivan_moottorin_kehapituus[pyoriva])
               end
               println("asento alustetaan ",moottori_id, " kohtaan: ",ins_matrix_PLC[6,moottori_id])
               nollaus(moottori,ins_matrix_PLC[:,moottori_id],ins_matrix_Mevea[:,moottori_id],ins_mevea[end],1.0)
@@ -246,7 +236,7 @@ function plc_mevea_connection()
             if   PID_saadin == 1
               moottori[13] += pid_saadin(moottori,moottori[9],ins_matrix_Mevea[2,moottori_id],aika_askel)
               #println("Haluttu nopeus: ",moottori[9]," Saavutettu nopeus: ",ins_matrix_Mevea[2,moottori_id])
-              if abs(moottori[13]) > 80.0 && 0 == findfirst(pyorivat_moottorit,moottori_id)
+              if abs(moottori[13]) > 80.0 && 0 == pyoriva
                 println("PID yli 80 moottorilla: ",moottori_id)
                 moottori[10] = 0
                 ins_matrix_PLC[6,moottori_id] = ins_matrix_Mevea[1,moottori_id]
@@ -276,8 +266,8 @@ function plc_mevea_connection()
             outs_plc[1,moottori_id] = 0
           end
 
-          if 1 == findfirst(pyorivat_moottorit,moottori_id)
-            outs_plc[3,moottori_id] = ((ins_matrix_Mevea[1,moottori_id]/pyorivan_moottorin_kehapituus)*360)%360 # Pyörimismatka muutetaan sen hetkiseski kulmaksi.
+          if 0 != pyoriva
+            outs_plc[3,moottori_id] = ((ins_matrix_Mevea[1,moottori_id]/pyorivan_moottorin_kehapituus[pyoriva])*360)%360 # Pyörimismatka muutetaan sen hetkiseski kulmaksi.
           else
             outs_plc[3,moottori_id] = ins_matrix_Mevea[1,moottori_id]
           end

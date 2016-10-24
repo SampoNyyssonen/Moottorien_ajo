@@ -1,10 +1,10 @@
+include("Lähtöarvot.jl")
+
 notwaiting = true
-moottorein_maara = 14
-plc = zeros(10,moottorein_maara+1)
-server = listen(5002)
-yhteys=connect(5003)
-#server2 = listen(5001)
-#sock2 = accept(server2)
+plc = zeros(10,noutputs_plc)
+server = listen(PLC_portti)
+yhteys = connect(Moottori_ohjaus_portti)
+
 while true
     if notwaiting
         notwaiting = false
@@ -12,22 +12,22 @@ while true
         @async begin
             sock = accept(server)
             moottori2 = read(sock, Float64, 11)
-            if moottori2[1] <= moottorein_maara
+            if moottori2[1] <= moottorien_maara
               plc[:,convert(Int64,moottori2[1])] = moottori2[2:11]
-            elseif moottori2[1] > moottorein_maara
-              plc[(convert(Int64,moottori2[1])-moottorein_maara),15] = moottori2[2]
+            elseif moottori2[1] > moottorien_maara
+              plc[(convert(Int64,moottori2[1])-moottorien_maara),15] = moottori2[2]
             end
             #println(moottori2)
             #println(plc[1,:])
-            write(yhteys,reshape(plc,(moottorein_maara+1)*10))
+            write(yhteys,reshape(plc,(moottorien_maara+1)*10))
             global notwaiting = true
 
         end
     end
     try
       #println(reshape(plc,30))
-      write(yhteys,reshape(plc,(moottorein_maara +1 )*10))
-      ins_plc2 = read(yhteys,Float64,60)
+      write(yhteys,reshape(plc,(moottorien_maara +1 )*10))
+      ins_plc2 = read(yhteys,Float64,noutputs_plc*4)
       #println(ins_plc2[1:4])
     catch e
       println("caught an error $e")

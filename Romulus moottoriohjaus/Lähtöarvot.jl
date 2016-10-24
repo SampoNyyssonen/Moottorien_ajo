@@ -1,4 +1,3 @@
-include("Lähtöarvot.jl")
 #DI 1.Execute         [0/1]        = Onko moottorille annettu liikkelle käskyä
 #DI 2.Reserve         [0/1]        = Tyhjä
 #DI 3.Torque          [0/1]        = Jos 0, nii lukee 4 rivin tiedot. Jos 1, niin moottori muuttuu torque säätöiseksi. Tämä vaikka kesken ajon
@@ -34,22 +33,28 @@ include("Lähtöarvot.jl")
     # 17.Trunnion bearing
     # 18.Round bar carriage
     # 19.Knife round bar
-    # 20.Lathe shaft
+    # 20.Lathe shaft 
 
 
+moottorien_maara = 20
+antureiden_maara = 4                                                          # 2 * onko pölli asemassa ja 2 * kuinka paksu pölli on
+venttiilien_maara = 2
 
-function kaynnista_automaatti()
-  yhteys_kaynnista= connect(PLC_portti)
-  moottori = [-1.0]
-  write(yhteys_kaynnista,moottori)
-  close(yhteys_kaynnista)
+PLC_portti = 5002
+Moottori_ohjaus_portti = 5003
+Mevea_solver_portti = 5112
 
-end
-    #oletusportti on 5002
-function yksittainen_suotto(moottori_id,kytkin,nopeus_saato,matka,nopeus,kiihdytys,jarrutus)
-  moottori23 = [moottori_id,kytkin,0.0,0.0,nopeus_saato,1.0,matka,nopeus,sign(nopeus)*abs(kiihdytys),-1*sign(nopeus)*abs(jarrutus),0.0]
-  yhteys_yksi= connect(PLC_portti)
-  write(yhteys_yksi,moottori23)
-  close(yhteys_yksi)
+ninputs_plc = (moottorien_maara + 1)*10                                       # PLC:n lähettämä datan määrä. Moottorit + venttiilin ohjaus. Viimeisessä matriisi sarakkeessa on venttiili ohjaus
+noutputs_plc = moottorien_maara + ceil(Int64,antureiden_maara/4)                          #Kuinka monta saraketta PLClle lähetetään. Moottorit + anturit.
 
-end
+mevea_rivi = 2
+  #Mevea moottorien tiedon määrä: paikka ja nopeus
+ninputs_mevea = moottorien_maara*mevea_rivi + 1 + antureiden_maara            # Mevea solverista tulevat outputit #Lisätään simulaation aika
+noutputs_mevea = moottorien_maara*2 + 1                                       # Mevea solveriin menevät inputit
+
+Tao = 0.005 #Moottoin reaktio nopeus Time Constant
+PID_saadin = 1.0 # Jos PID säädin on päällä, on arvo 1, muuten 0.
+
+pyorivat_moottorit = [9,16,19,20] #Mitkä moottorit ovat pyöriviä
+
+pyorivan_moottorin_kehapituus = 2*pi*[30,42.5,42.5,45] # Pyörivän moottorin kehapituus
